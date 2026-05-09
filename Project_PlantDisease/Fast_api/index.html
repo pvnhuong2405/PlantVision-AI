@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlantVision AI - Chẩn đoán bệnh cây trồng</title>
+    <meta name="description" content="Hệ thống chẩn đoán bệnh cây trồng thông minh sử dụng YOLOv11, SAM, EfficientNet và Gemini AI">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+            --border: #30363d; --accent: #3fb950; --accent2: #58a6ff;
+            --text: #e6edf3; --text-muted: #8b949e;
+            --user-bubble: #1f3a5f; --danger: #f85149;
+            --warn: #d29922; --purple: #bc8cff;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; overflow:hidden; }
+
+        /* SIDEBAR */
+        .sidebar { width:260px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:16px; gap:12px; flex-shrink:0; }
+        .logo { display:flex; align-items:center; gap:10px; padding:8px; font-weight:700; font-size:18px; }
+        .logo-icon { width:36px; height:36px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+        .new-chat-btn { display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; cursor:pointer; color:var(--text); font-size:14px; transition:all .2s; }
+        .new-chat-btn:hover { background:var(--border); border-color:var(--accent); }
+        .sidebar-label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; padding:4px 4px 0; }
+        .sidebar-footer { margin-top:auto; padding-top:12px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); text-align:center; line-height:1.6; }
+        .status-dot { width:8px; height:8px; background:var(--accent); border-radius:50%; display:inline-block; margin-right:4px; animation:pulse 2s infinite; }
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+        /* MAIN */
+        .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+        .topbar { padding:12px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+        .model-badge { font-size:12px; background:var(--surface2); border:1px solid var(--border); padding:4px 10px; border-radius:20px; color:var(--text-muted); }
+
+        /* CHAT AREA */
+        .chat-area { flex:1; overflow-y:auto; padding:24px; scroll-behavior:smooth; }
+        .chat-area::-webkit-scrollbar { width:5px; }
+        .chat-area::-webkit-scrollbar-thumb { background:var(--border); border-radius:10px; }
+
+        /* WELCOME */
+        .welcome { text-align:center; padding:60px 20px; }
+        .welcome h1 { font-size:34px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:10px; }
+        .welcome p { color:var(--text-muted); font-size:15px; }
+        .welcome-cards { display:flex; gap:12px; justify-content:center; margin-top:28px; flex-wrap:wrap; }
+        .welcome-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; width:175px; font-size:13px; cursor:pointer; transition:all .2s; text-align:left; }
+        .welcome-card:hover { border-color:var(--accent); background:var(--surface2); transform:translateY(-2px); }
+        .welcome-card .icon { font-size:22px; margin-bottom:8px; }
+
+        /* MESSAGES */
+        .message { display:flex; gap:12px; margin-bottom:20px; animation:fadeUp .3s ease; }
+        @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .message.user { flex-direction:row-reverse; }
+        .avatar { width:34px; height:34px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; }
+        .avatar.bot { background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+        .avatar.user { background:var(--user-bubble); }
+        .bubble { max-width:72%; padding:12px 16px; border-radius:16px; font-size:14px; line-height:1.7; }
+        .bubble.bot { background:var(--surface); border:1px solid var(--border); border-top-left-radius:4px; }
+        .bubble.user { background:var(--user-bubble); border-top-right-radius:4px; }
+        .bubble img { max-width:100%; max-height:280px; border-radius:10px; margin-bottom:8px; display:block; }
+
+        /* RESULT CARD */
+        .result-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px; margin:10px 0; }
+        .result-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .result-header .title { font-weight:600; font-size:14px; }
+        .result-header .badge { font-size:11px; padding:3px 8px; border-radius:20px; font-weight:600; }
+        .badge-disease { background:rgba(248,81,73,.15); color:var(--danger); }
+        .badge-healthy { background:rgba(63,185,80,.15); color:var(--accent); }
+        .badge-uncertain { background:rgba(210,153,34,.15); color:var(--warn); }
+        .result-row { display:flex; justify-content:space-between; padding:5px 0; font-size:13px; }
+        .result-row .label { color:var(--text-muted); }
+        .result-row .value { font-weight:600; }
+        .conf-bar { height:4px; background:var(--border); border-radius:2px; margin-top:3px; margin-bottom:8px; }
+        .conf-fill { height:100%; border-radius:2px; transition:width 1s ease; }
+        .conf-green { background:linear-gradient(90deg,var(--accent),#2ea043); }
+        .conf-blue { background:linear-gradient(90deg,var(--accent2),var(--purple)); }
+        .conf-red { background:linear-gradient(90deg,var(--warn),var(--danger)); }
+        .divider { border:0; border-top:1px solid var(--border); margin:10px 0; }
+
+        /* LEAF TABLE */
+        .leaf-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+        .leaf-table th { text-align:left; color:var(--text-muted); padding:4px 6px; font-weight:500; border-bottom:1px solid var(--border); }
+        .leaf-table td { padding:4px 6px; }
+        .leaf-tag { font-size:10px; padding:2px 6px; border-radius:4px; font-weight:600; }
+        .tag-disease { background:rgba(248,81,73,.12); color:var(--danger); }
+        .tag-healthy { background:rgba(63,185,80,.12); color:var(--accent); }
+        .tag-sam { background:rgba(188,140,255,.12); color:var(--purple); }
+        .tag-yolo { background:rgba(88,166,255,.12); color:var(--accent2); }
+
+        /* TYPING */
+        .typing-indicator { display:flex; align-items:center; gap:5px; padding:4px 0; }
+        .dot { width:7px; height:7px; background:var(--text-muted); border-radius:50%; animation:bounce .8s infinite; }
+        .dot:nth-child(2){animation-delay:.15s} .dot:nth-child(3){animation-delay:.3s}
+        @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+
+        /* INPUT */
+        .input-area { padding:14px 24px 18px; border-top:1px solid var(--border); }
+        .input-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:10px 14px; display:flex; flex-direction:column; gap:8px; transition:border-color .2s; }
+        .input-box:focus-within { border-color:var(--accent2); }
+        #preview-wrap { display:none; position:relative; width:fit-content; }
+        #preview-wrap img { width:72px; height:72px; object-fit:cover; border-radius:10px; border:2px solid var(--border); }
+        #remove-img { position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center; }
+        .input-row { display:flex; align-items:center; gap:8px; }
+        #user-input { flex:1; background:transparent; border:none; outline:none; font-size:14px; color:var(--text); font-family:'Inter',sans-serif; resize:none; max-height:100px; }
+        #user-input::placeholder { color:var(--text-muted); }
+        .icon-btn { width:34px; height:34px; border-radius:10px; background:transparent; border:1px solid var(--border); cursor:pointer; color:var(--text-muted); transition:all .2s; display:flex; align-items:center; justify-content:center; font-size:14px; }
+        .icon-btn:hover { background:var(--surface2); color:var(--text); border-color:var(--accent2); }
+        #send-btn { background:var(--accent); border-color:var(--accent); color:#000; font-weight:600; }
+        #send-btn:hover { background:#2ea043; }
+        #send-btn:disabled { opacity:.4; cursor:not-allowed; }
+        .hint { text-align:center; font-size:11px; color:var(--text-muted); margin-top:6px; }
+
+        @media(max-width:768px){ .sidebar{display:none;} .bubble{max-width:90%;} }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+    <div class="logo"><div class="logo-icon">🌿</div> PlantVision AI</div>
+    <button class="new-chat-btn" onclick="newChat()"><i class="fa fa-plus"></i> Cuộc trò chuyện mới</button>
+    <!-- <div class="sidebar-label">Pipeline</div> -->
+    <div style="font-size:12px; color:var(--text-muted); padding:4px; line-height:1.7;">
+        <!-- 1. YOLOv11 → Phát hiện lá<br>
+        2. SAM + YOLO Crop (Dual)<br>
+        3. EfficientNet-B3 × 2 luồng<br>
+        4. Voting → Kết quả<br>
+        5. Gemini AI → Tư vấn -->
+    </div>
+    <div class="sidebar-footer">
+        <!-- <span class="status-dot"></span>Dual Pipeline + Multi-Leaf<br>
+        <span style="font-size:10px;">Phân tích tối đa 5 lá / ảnh</span> -->
+    </div>
+</aside>
+
+<main class="main">
+    <div class="topbar">
+        <span style="font-weight:600; font-size:15px;">PlantVision AI</span>
+        <span class="model-badge">EfficientNet-B3 &nbsp;|&nbsp; Gemini 2.5-flash</span>
+    </div>
+
+    <div class="chat-area" id="chat-box">
+        <div class="welcome" id="welcome-screen">
+            <h1>PlantVision AI</h1>
+            <p>Tải ảnh lá cây lên để chẩn đoán bệnh và nhận tư vấn từ chuyên gia AI</p>
+            <div class="welcome-cards">
+                <div class="welcome-card" onclick="setQ('Bệnh này là bệnh gì, cách phòng tránh')">
+                    <div class="icon">🔬</div>Phân tích bệnh từ ảnh
+                </div>
+                <div class="welcome-card" onclick="setQ('Cách điều trị bệnh này hiệu quả nhất?')">
+                    <div class="icon">💊</div>Hỏi cách điều trị
+                </div>
+                <div class="welcome-card" onclick="setQ('Cách phòng ngừa bệnh tái phát?')">
+                    <div class="icon">🛡️</div>Phòng ngừa bệnh
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-box">
+            <div id="preview-wrap">
+                <img id="img-preview" src="" alt="preview">
+                <button id="remove-img" onclick="removeImage()"><i class="fa fa-times"></i></button>
+            </div>
+            <div class="input-row">
+                <label class="icon-btn" title="Tải ảnh lên"><i class="fa fa-image"></i><input type="file" id="file-input" accept="image/*" hidden></label>
+                <textarea id="user-input" rows="1" placeholder="Tải ảnh lá cây hoặc nhập câu hỏi..."></textarea>
+                <button class="icon-btn" id="send-btn" onclick="handleSend()" title="Gửi"><i class="fa fa-paper-plane"></i></button>
+            </div>
+        </div>
+        <!-- <p class="hint">PlantVision AI sử dụng Dual Pipeline (SAM + YOLO) phân tích tối đa 5 lá mỗi ảnh</p> -->
+    </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const chatBox = $('chat-box'), userInput = $('user-input'), fileInput = $('file-input');
+const sendBtn = $('send-btn'), previewWrap = $('preview-wrap'), imgPreview = $('img-preview');
+
+let lastResult = null, isProcessing = false;
+
+userInput.addEventListener('input', () => { userInput.style.height = 'auto'; userInput.style.height = Math.min(userInput.scrollHeight, 100) + 'px'; });
+userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
+fileInput.addEventListener('change', () => { const f = fileInput.files[0]; if (f) { imgPreview.src = URL.createObjectURL(f); previewWrap.style.display = 'block'; } });
+
+function removeImage() { fileInput.value = ''; imgPreview.src = ''; previewWrap.style.display = 'none'; }
+function setQ(q) { userInput.value = q; userInput.focus(); }
+function scrollDown() { chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' }); }
+function hideWelcome() { const w = $('welcome-screen'); if (w) w.remove(); }
+
+function newChat() {
+    chatBox.innerHTML = `<div class="welcome" id="welcome-screen">
+        <h1>PlantVision AI</h1>
+        <p>Tải ảnh lá cây lên để chẩn đoán bệnh và nhận tư vấn từ chuyên gia AI</p>
+        <div class="welcome-cards">
+            <div class="welcome-card" onclick="setQ('Bệnh này là bệnh gì, cách phòng tránh')"><div class="icon">🔬</div>Phân tích bệnh từ ảnh</div>
+            <div class="welcome-card" onclick="setQ('Cách điều trị bệnh này hiệu quả nhất?')"><div class="icon">💊</div>Hỏi cách điều trị</div>
+            <div class="welcome-card" onclick="setQ('Cách phòng ngừa bệnh tái phát?')"><div class="icon">🛡️</div>Phòng ngừa bệnh</div>
+        </div></div>`;
+    lastResult = null;
+}
+
+function addUserMsg(text, imgUrl) {
+    hideWelcome();
+    const d = document.createElement('div');
+    d.className = 'message user';
+    d.innerHTML = `<div class="avatar user"><i class="fa fa-user"></i></div>
+        <div class="bubble user">${imgUrl ? `<img src="${imgUrl}">` : ''}${text ? `<p>${text}</p>` : ''}</div>`;
+    chatBox.appendChild(d); scrollDown();
+}
+
+function addTyping() {
+    const d = document.createElement('div'); d.className = 'message'; d.id = 'typing-msg';
+    d.innerHTML = `<div class="avatar bot">🌿</div><div class="bubble bot"><div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+    chatBox.appendChild(d); scrollDown();
+}
+
+function removeTyping() { const t = $('typing-msg'); if (t) t.remove(); }
+
+function buildResultCard(result) {
+    const isHealthy = result.status === 'healthy';
+    const isUncertain = result.status === 'uncertain';
+    const diseaseName = result.disease.includes('___') ? result.disease.split('___')[1].replace(/_/g, ' ') : result.disease;
+    const plantConf = Math.round(result.plant_conf * 100);
+    const diseaseConf = Math.round(result.disease_conf * 100);
+    const elapsed = result.elapsed_time || '?';
+    const totalLeaves = result.leaves_analyzed || 1;
+    const diseasedLeaves = result.leaves_diseased || 0;
+    const healthyLeaves = result.leaves_healthy || 0;
+
+    let badgeClass = 'badge-disease', badgeText = 'Phát hiện bệnh';
+    if (isHealthy) { badgeClass = 'badge-healthy'; badgeText = 'Khỏe mạnh'; }
+    if (isUncertain) { badgeClass = 'badge-uncertain'; badgeText = 'Chưa chắc chắn'; }
+
+    // Per-leaf detail summary (No longer showing table for cleaner UI)
+    const summaryText = `<div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Phân tích tổng hợp từ ${totalLeaves} mẫu lá (${diseasedLeaves} bệnh / ${healthyLeaves} khỏe)</div>`;
+
+    return `<p style="margin-bottom:10px;">Phân tích xong trong <b>${elapsed}s</b>:</p>
+    <div class="result-card">
+        <div class="result-header">
+            <span class="title">Kết quả chẩn đoán</span>
+            <span class="badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="result-row"><span class="label">🌱 Loại cây</span><span class="value">${result.plant.replace(/_/g,' ')}</span></div>
+        <div class="conf-bar"><div class="conf-fill conf-green" style="width:${plantConf}%"></div></div>
+        <div class="result-row"><span class="label" style="font-size:11px;">Độ tin cậy</span><span class="value" style="font-size:11px;">${plantConf}%</span></div>
+        <hr class="divider">
+        <div class="result-row"><span class="label">🦠 Tình trạng</span><span class="value" style="color:${isHealthy ? 'var(--accent)' : 'var(--danger)'}">${diseaseName}</span></div>
+        <div class="conf-bar"><div class="conf-fill ${isHealthy ? 'conf-green' : 'conf-red'}" style="width:${diseaseConf}%"></div></div>
+        <div class="result-row"><span class="label" style="font-size:11px;">Độ tin cậy</span><span class="value" style="font-size:11px;">${diseaseConf}%</span></div>
+        <hr class="divider">
+        ${summaryText}
+    </div>
+    <p style="color:var(--text-muted); font-size:13px; margin-top:8px;">
+        ${isHealthy ? '✅ Cây trông khỏe mạnh! Bạn có thể hỏi thêm về cách chăm sóc.' : '⚠️ Phát hiện bệnh trên ' + diseasedLeaves + '/' + totalLeaves + ' lá. Hãy hỏi tôi cách điều trị!'}
+    </p>`;
+}
+
+function addBotResult(result) {
+    removeTyping();
+    const d = document.createElement('div'); d.className = 'message';
+    d.innerHTML = `<div class="avatar bot">🌿</div><div class="bubble bot">${buildResultCard(result)}</div>`;
+    chatBox.appendChild(d); scrollDown();
+}
+
+async function streamGemini(plant, plantConf, disease, diseaseConf, question) {
+    removeTyping();
+    const d = document.createElement('div'); d.className = 'message';
+    const bid = 'stream-' + Date.now();
+    d.innerHTML = `<div class="avatar bot">🌿</div><div class="bubble bot" id="${bid}"></div>`;
+    chatBox.appendChild(d); scrollDown();
+    const bubble = $(bid);
+
+    const fd = new FormData();
+    fd.append('plant', plant); fd.append('plant_conf', plantConf);
+    fd.append('disease', disease); fd.append('disease_conf', diseaseConf);
+    fd.append('question', question);
+
+    try {
+        const resp = await fetch('/chat/stream', { method: 'POST', body: fd });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n'); buf = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.token) { bubble.innerHTML += data.token.replace(/\n/g,'<br>'); scrollDown(); }
+                    if (data.error) { bubble.innerHTML += `<span style="color:var(--danger)">${data.error}</span>`; }
+                } catch {}
+            }
+        }
+    } catch (e) {
+        bubble.innerHTML = `<span style="color:var(--danger)">Lỗi kết nối server: ${e.message}</span>`;
+    }
+}
+
+function addErrorMsg(msg) {
+    const d = document.createElement('div'); d.className = 'message';
+    d.innerHTML = `<div class="avatar bot">🌿</div><div class="bubble bot" style="color:var(--danger)">${msg}</div>`;
+    chatBox.appendChild(d); scrollDown();
+}
+
+async function handleSend() {
+    if (isProcessing) return;
+    const text = userInput.value.trim();
+    const file = fileInput.files[0];
+    if (!file && !text) return;
+
+    isProcessing = true; sendBtn.disabled = true;
+    const imgUrl = file ? URL.createObjectURL(file) : null;
+    addUserMsg(text, imgUrl);
+    userInput.value = ''; userInput.style.height = 'auto';
+
+    if (file) {
+        addTyping();
+        const fd = new FormData(); fd.append('file', file);
+        removeImage();
+        try {
+            const resp = await fetch('/predict', { method: 'POST', body: fd });
+            const result = await resp.json();
+            lastResult = result;
+            if (result.status === 'no_leaf_detected') {
+                removeTyping();
+                addErrorMsg('Không tìm thấy lá cây nào trong ảnh. Vui lòng chụp rõ nét hơn.');
+            } else if (result.status === 'error') {
+                removeTyping();
+                addErrorMsg('Lỗi phân tích: ' + (result.message || 'Unknown'));
+            } else {
+                addBotResult(result);
+                if (text) { addTyping(); await streamGemini(result.plant, result.plant_conf, result.disease, result.disease_conf, text); }
+            }
+        } catch (e) {
+            removeTyping();
+            addErrorMsg('Lỗi kết nối server. Đảm bảo FastAPI đang chạy tại localhost:8000');
+        }
+    } else if (text && lastResult) {
+        addTyping();
+        await streamGemini(lastResult.plant, lastResult.plant_conf, lastResult.disease, lastResult.disease_conf, text);
+    } else {
+        addErrorMsg('Vui lòng tải ảnh lá cây trước khi đặt câu hỏi.');
+    }
+    isProcessing = false; sendBtn.disabled = false;
+}
+</script>
+</body>
+</html>
