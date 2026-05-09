@@ -472,7 +472,7 @@ https://github.com/user-attachments/assets/d00942c4-94d6-4613-bd58-4debec751334
 
 ---
 ## Link weight
-https://drive.google.com/drive/folders/1hOKtJyN_pEtUefNgm2YgrGPmuzZFgx2A?usp=sharing
+- Link: https://drive.google.com/drive/folders/1hOKtJyN_pEtUefNgm2YgrGPmuzZFgx2A?usp=sharing
 ---
 ## Tác giả
 
