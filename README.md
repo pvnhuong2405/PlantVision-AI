@@ -467,7 +467,7 @@ CHON: Pepper,_bell___Bacterial_spot (100.0%)
 
 ---
 ## Video demo
-
+https://github.com/user-attachments/assets/d00942c4-94d6-4613-bd58-4debec751334
 
 
 ---
